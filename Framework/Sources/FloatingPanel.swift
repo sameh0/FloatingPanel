@@ -317,17 +317,22 @@ class FloatingPanel: NSObject, UIGestureRecognizerDelegate {
 
             if let animator = self.animator {
                 guard surfaceView.presentationFrame.minY - layoutAdapter.topY > -1.0 else { return }
-                guard animator.isInterruptible else { return }
                 log.debug("panel animation interrupted!!!")
 
-                animator.stopAnimation(false)
+                if animator.isInterruptible {
+                    animator.stopAnimation(false)
+                }
                 // A user can stop a panel at the nearest Y of a target position so this fine-tunes
                 // the a small gap between the presentation layer frame and model layer frame
                 // to unlock scroll view properly at finishAnimation(at:)
                 if abs(surfaceView.frame.minY - layoutAdapter.topY) <= 1.0 {
                     surfaceView.frame.origin.y = layoutAdapter.topY
                 }
-                animator.finishAnimation(at: .current)
+                if animator.isInterruptible {
+                    animator.finishAnimation(at: .current)
+                } else {
+                    self.animator = nil
+                }
             }
 
             if interactionInProgress == false,
@@ -665,7 +670,8 @@ class FloatingPanel: NSObject, UIGestureRecognizerDelegate {
             self.updateLayout(to: targetPosition)
         }
         animator.addCompletion { [weak self] pos in
-            guard let `self` = self else { return }
+            // Prevent calling `finishAnimation(at:)` on an animator interrupted whose `isInterruptive` is false.
+            guard let `self` = self, self.animator == animator else { return }
             self.finishAnimation(at: targetPosition)
         }
         self.animator = animator
@@ -767,6 +773,7 @@ class FloatingPanel: NSObject, UIGestureRecognizerDelegate {
             log.debug("Already scroll locked.")
             return
         }
+        log.debug("lock scroll view")
 
         scrollBouncable = scrollView.bounces
         scrollIndictorVisible = scrollView.showsVerticalScrollIndicator
@@ -778,6 +785,7 @@ class FloatingPanel: NSObject, UIGestureRecognizerDelegate {
 
     private func unlockScrollView() {
         guard let scrollView = scrollView, scrollView.isLocked else { return }
+        log.debug("unlock scroll view")
 
         scrollView.isDirectionalLockEnabled = false
         scrollView.bounces = scrollBouncable
