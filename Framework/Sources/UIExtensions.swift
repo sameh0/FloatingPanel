@@ -75,6 +75,12 @@ extension UIView {
     func enableAutoLayout() {
         translatesAutoresizingMaskIntoConstraints = false
     }
+
+    static func performWithLinear(startTime: Double = 0.0, relativeDuration: Double = 1.0, _ animations: @escaping (() -> Void)) {
+        UIView.animateKeyframes(withDuration: 0.0, delay: 0.0, options: [.calculationModeCubic], animations: {
+            UIView.addKeyframe(withRelativeStartTime: 0.0, relativeDuration: 0.75, animations: animations)
+        }, completion: nil)
+    }
 }
 
 #if __FP_LOG

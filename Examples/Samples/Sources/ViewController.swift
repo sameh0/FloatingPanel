@@ -258,6 +258,7 @@ extension SampleListViewController: UITableViewDelegate {
 
             // Initialize FloatingPanelController
             detailPanelVC = FloatingPanelController()
+            detailPanelVC.delegate = self
 
             // Initialize FloatingPanelController and add the view
             detailPanelVC.surfaceView.cornerRadius = 6.0
@@ -265,6 +266,9 @@ extension SampleListViewController: UITableViewDelegate {
 
             // Set a content view controller
             detailPanelVC.set(contentViewController: contentVC)
+
+            detailPanelVC.contentMode = .fitToBounds
+            (contentVC as? DetailViewController)?.intrinsicHeightConstraint.priority = .defaultLow
 
             //  Add FloatingPanel to self.view
             detailPanelVC.addPanel(toParent: self, belowView: nil, animated: true)
@@ -719,6 +723,7 @@ extension DebugTableViewController: UITableViewDelegate {
 }
 
 class DetailViewController: InspectableViewController {
+    @IBOutlet weak var intrinsicHeightConstraint: NSLayoutConstraint!
     @IBOutlet weak var closeButton: UIButton!
     @IBAction func close(sender: UIButton) {
         // (self.parent as? FloatingPanelController)?.removePanelFromParent(animated: true, completion: nil)
@@ -734,6 +739,10 @@ class DetailViewController: InspectableViewController {
         default:
             break
         }
+    }
+    @IBAction func modeChanged(_ sender: Any) {
+        guard let fpc = parent as? FloatingPanelController else { return }
+        fpc.contentMode = (fpc.contentMode == .static) ? .fitToBounds : .static
     }
 
     @IBAction func tapped(_ sender: Any) {

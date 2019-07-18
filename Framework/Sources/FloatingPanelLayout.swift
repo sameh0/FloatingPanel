@@ -135,7 +135,7 @@ struct LayoutSegment {
 }
 
 class FloatingPanelLayoutAdapter {
-    weak var vc: UIViewController!
+    weak var vc: FloatingPanelController!
     private weak var surfaceView: FloatingPanelSurfaceView!
     private weak var backdropView: FloatingPanelBackdropView!
 
@@ -157,6 +157,8 @@ class FloatingPanelLayoutAdapter {
     private var tipConstraints: [NSLayoutConstraint] = []
     private var offConstraints: [NSLayoutConstraint] = []
     private var interactiveTopConstraint: NSLayoutConstraint?
+    private var bottomConstraint: NSLayoutConstraint?
+
 
     private var heightConstraint: NSLayoutConstraint?
 
@@ -276,10 +278,18 @@ class FloatingPanelLayoutAdapter {
                   ", content safe area(bottom) =", safeAreaBottom)
     }
 
-    func prepareLayout(in vc: UIViewController) {
+    func prepareLayout(in vc: FloatingPanelController) {
         self.vc = vc
 
         NSLayoutConstraint.deactivate(fixedConstraints + fullConstraints + halfConstraints + tipConstraints + offConstraints)
+        if let heightConstraint = self.heightConstraint {
+            NSLayoutConstraint.deactivate([heightConstraint])
+            self.heightConstraint = nil
+        }
+        if let bottomConstraint = self.bottomConstraint {
+            NSLayoutConstraint.deactivate([bottomConstraint])
+            self.bottomConstraint = nil
+        }
 
         surfaceView.translatesAutoresizingMaskIntoConstraints = false
         backdropView.translatesAutoresizingMaskIntoConstraints = false
@@ -294,6 +304,11 @@ class FloatingPanelLayoutAdapter {
             ]
 
         fixedConstraints = surfaceConstraints + backdropConstraints
+
+        if vc.contentMode == .fitToBounds {
+            bottomConstraint = surfaceView.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor,
+                                                                   constant: 0.0)
+        }
 
         // Flexible surface constraints for full, half, tip and off
         let topAnchor: NSLayoutYAxisAnchor = {
@@ -361,6 +376,13 @@ class FloatingPanelLayoutAdapter {
     func endInteraction(at state: FloatingPanelPosition) {
         // Don't deactivate `interactiveTopConstraint` here because it leads to
         // unsatisfiable constraints
+
+        if self.interactiveTopConstraint == nil {
+            // Actiavate `interactiveTopConstraint` for `fitToBounds` mode.
+            // It goes throught this path when the pan gesture state jumps
+            // from .begin to .end.
+            startInteraction(at: state)
+        }
     }
 
     // The method is separated from prepareLayout(to:) for the rotation support
@@ -368,15 +390,30 @@ class FloatingPanelLayoutAdapter {
     func updateHeight() {
         guard let vc = vc else { return }
 
+        if layout is FloatingPanelIntrinsicLayout {
+            updateIntrinsicHeight()
+        }
+
+        defer {
+            if layout is FloatingPanelIntrinsicLayout {
+                NSLayoutConstraint.deactivate(fullConstraints)
+                fullConstraints = [
+                    surfaceView.topAnchor.constraint(equalTo: vc.layoutGuide.bottomAnchor,
+                                                     constant: -fullInset),
+                ]
+            }
+        }
+
         if let const = self.heightConstraint {
             NSLayoutConstraint.deactivate([const])
         }
+
+        guard vc.contentMode != .fitToBounds else { return }
 
         let heightConstraint: NSLayoutConstraint
 
         switch layout {
         case is FloatingPanelIntrinsicLayout:
-            updateIntrinsicHeight()
             heightConstraint = surfaceView.heightAnchor.constraint(equalToConstant: intrinsicHeight + safeAreaInsets.bottom)
         default:
             let const = -(positionY(for: topMostState))
@@ -388,14 +425,6 @@ class FloatingPanelLayoutAdapter {
         self.heightConstraint = heightConstraint
 
         surfaceView.bottomOverflow = vc.view.bounds.height + layout.topInteractionBuffer
-
-        if layout is FloatingPanelIntrinsicLayout {
-            NSLayoutConstraint.deactivate(fullConstraints)
-            fullConstraints = [
-                surfaceView.topAnchor.constraint(equalTo: vc.layoutGuide.bottomAnchor,
-                                                 constant: -fullInset),
-            ]
-        }
     }
 
     func updateInteractiveTopConstraint(diff: CGFloat, allowsTopBuffer: Bool, with behavior: FloatingPanelBehavior) {
@@ -451,7 +480,23 @@ class FloatingPanelLayoutAdapter {
         return (1.0 - (1.0 / ((buffer * 0.55 / base) + 1.0))) * base
     }
 
-    func activateLayout(of state: FloatingPanelPosition) {
+    func activateFixedLayout() {
+        // Must deactivate `interactiveTopConstraint` here
+        if let interactiveTopConstraint = interactiveTopConstraint {
+            NSLayoutConstraint.deactivate([interactiveTopConstraint])
+            self.interactiveTopConstraint = nil
+        }
+
+        NSLayoutConstraint.activate(fixedConstraints)
+
+        if vc.contentMode == .fitToBounds {
+            if let bottomConstraint = bottomConstraint {
+                NSLayoutConstraint.activate([bottomConstraint])
+            }
+        }
+    }
+
+    func activateInteractiveLayout(of state: FloatingPanelPosition) {
         defer {
             surfaceView.superview!.layoutIfNeeded()
         }
@@ -459,13 +504,6 @@ class FloatingPanelLayoutAdapter {
         var state = state
 
         setBackdropAlpha(of: state)
-
-        // Must deactivate `interactiveTopConstraint` here
-        if let interactiveTopConstraint = interactiveTopConstraint {
-            NSLayoutConstraint.deactivate([interactiveTopConstraint])
-            self.interactiveTopConstraint = nil
-        }
-        NSLayoutConstraint.activate(fixedConstraints)
 
         if isValid(state) == false {
             state = layout.initialPosition
@@ -482,6 +520,11 @@ class FloatingPanelLayoutAdapter {
         case .hidden:
             NSLayoutConstraint.activate(offConstraints)
         }
+    }
+
+    func activateLayout(of state: FloatingPanelPosition) {
+        activateFixedLayout()
+        activateInteractiveLayout(of: state)
     }
 
     func isValid(_ state: FloatingPanelPosition) -> Bool {

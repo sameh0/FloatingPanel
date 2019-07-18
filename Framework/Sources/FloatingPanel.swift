@@ -147,7 +147,8 @@ class FloatingPanel: NSObject, UIGestureRecognizerDelegate {
     // MARK: - Layout update
 
     private func updateLayout(to target: FloatingPanelPosition) {
-        self.layoutAdapter.activateLayout(of: target)
+        self.layoutAdapter.activateFixedLayout()
+        self.layoutAdapter.activateInteractiveLayout(of: target)
     }
 
     func getBackdropAlpha(at currentY: CGFloat, with translation: CGPoint) -> CGFloat {
@@ -467,6 +468,8 @@ class FloatingPanel: NSObject, UIGestureRecognizerDelegate {
     // from the full position because SafeArea is global in a screen.
     private func preserveContentVCLayoutIfNeeded() {
         guard let vc = viewcontroller else { return }
+        guard vc.contentMode != .fitToBounds else { return }
+
         // Must include topY
         if (surfaceView.frame.minY <= layoutAdapter.topY) {
             if !disabledBottomAutoLayout {
@@ -660,9 +663,18 @@ class FloatingPanel: NSObject, UIGestureRecognizerDelegate {
         let velocityVector = (distance != 0) ? CGVector(dx: 0, dy: min(abs(velocity.y)/distance, 30.0)) : .zero
         let animator = behavior.interactionAnimator(vc, to: targetPosition, with: velocityVector)
         animator.addAnimations { [weak self] in
-            guard let `self` = self else { return }
+            guard let `self` = self, let vc = self.viewcontroller else { return }
             self.state = targetPosition
-            self.updateLayout(to: targetPosition)
+            switch vc.contentMode {
+            case .fitToBounds:
+                UIView.performWithLinear(startTime: 0.0, relativeDuration: 0.75) {
+                    self.layoutAdapter.activateFixedLayout()
+                    self.surfaceView.superview!.layoutIfNeeded()
+                }
+            case .static:
+                self.layoutAdapter.activateFixedLayout()
+            }
+            self.layoutAdapter.activateInteractiveLayout(of: targetPosition)
         }
         animator.addCompletion { [weak self] pos in
             guard let `self` = self else { return }

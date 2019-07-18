@@ -113,6 +113,10 @@ open class FloatingPanelController: UIViewController, UIScrollViewDelegate, UIGe
         case always
         case never
     }
+    public enum ContentMode: Int {
+        case `static`
+        case fitToBounds
+    }
 
     /// The delegate of the floating panel controller object.
     public weak var delegate: FloatingPanelControllerDelegate?{
@@ -177,6 +181,15 @@ open class FloatingPanelController: UIViewController, UIScrollViewDelegate, UIGe
         set { set(contentViewController: newValue) }
         get { return _contentViewController }
     }
+
+    public var contentMode: ContentMode = .static {
+        didSet {
+            if position != .hidden {
+                activateLayout()
+            }
+        }
+    }
+
     private var _contentViewController: UIViewController?
 
     private(set) var floatingPanel: FloatingPanel!
