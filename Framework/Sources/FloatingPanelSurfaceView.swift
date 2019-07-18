@@ -36,7 +36,10 @@ public class FloatingPanelSurfaceView: UIView {
     ///
     /// `self.contentView` is masked with the top rounded corners automatically on iOS 11 and later.
     /// On iOS 10, they are not automatically masked because of a UIVisualEffectView issue. See https://forums.developer.apple.com/thread/50854
-    public var cornerRadius: CGFloat = 0.0 { didSet { setNeedsLayout() } }
+    public func setCornerRadius(_ radius:CGFloat){
+        cornerRadius = radius
+    }
+    var cornerRadius: CGFloat = 0.0 { didSet { setNeedsLayout() } }
 
     /// A Boolean indicating whether the surface shadow is displayed.
     public var shadowHidden: Bool = false  { didSet { setNeedsLayout() } }
